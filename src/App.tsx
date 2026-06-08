@@ -1,11 +1,13 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React from 'react';
+import { useState, useEffect, useCallback, useRef, createContext, useContext, type ReactNode } from 'react';
 import {
   Search, Heart, Home as HomeIcon, User, MapPin, Star,
   ChevronRight, Bell, MessageSquare, ArrowLeft, CheckCircle2,
   AlertCircle, Wifi, Wind, Car, Utensils, Shield, Dumbbell,
   Waves, X, HelpCircle, Phone, Building2, LayoutDashboard,
   PlusCircle, TrendingUp, Eye, EyeOff, Lock, Mail, Smartphone,
-  Trash2, ClipboardList,
+  Trash2, ClipboardList, CheckCheck, Ban, Languages, Contrast,
+  XCircle,
 } from 'lucide-react';
 
 /* ══════════════════════════════════════════════
@@ -15,7 +17,145 @@ const C = {
   primary: '#FFD600', secondary: '#FFE033',
   error: '#E24B4A', success: '#52C41A', warning: '#F59E0B',
   dark: '#1a1a1a', muted: '#888', surface: '#FAFAFA',
+  // Step 12 – Accessible palette (replaces red/green for color-blind users)
+  a11yAvail:   '#1A73E8', // Blue  – replaces green  (available)
+  a11yWarn:    '#FF6D00', // Orange – replaces yellow (almost full)
+  a11yFull:    '#333333', // Dark  – replaces red    (full)
 };
+
+/* ══════════════════════════════════════════════
+   STEP 10 – i18n / TRANSLATIONS
+══════════════════════════════════════════════ */
+type Lang = 'id' | 'en';
+const T: Record<Lang, Record<string,string>> = {
+  id: {
+    welcome:'Selamat datang 👋', search_placeholder:'Cari lokasi, kampus, atau nama kost...',
+    near_campus:'Dekat Kampus', all_kost:'Semua Kost', filter:'Filter Pencarian',
+    price_range:'Harga per Bulan', facilities:'Fasilitas', reset_filter:'Reset Filter',
+    apply_filter:'TERAPKAN FILTER', available:'Tersedia', almost_full:'Hampir Penuh',
+    full:'Penuh', kost_seeker:'Pencari Kost', kost_owner:'Pemilik Kost',
+    beranda:'Beranda', favorit:'Favorit', booking:'Booking', profil:'Profil',
+    kos_saya:'Kos Saya', masuk:'MASUK', daftar:'DAFTAR SEKARANG', keluar:'Keluar Akun',
+    month:'/bulan', per_month:'/bln', rating:'Rating', location:'Lokasi',
+    book_now:'BOOKING SEKARANG', back:'Kembali', save_fav:'Simpan ke Favorit',
+    remove_fav:'Hapus dari Favorit', available_rooms:'Sisa {n} kamar kosong – Segera booking!',
+    almost_full_msg:'Hampir penuh – Hanya tersisa 1 kamar!',
+    full_msg:'Kamar penuh – Daftarkan untuk notifikasi',
+    language:'Bahasa', en_label:'English', id_label:'Indonesia',
+    high_contrast:'Mode Kontras Tinggi', accessibility:'Aksesibilitas',
+    settings:'Pengaturan', push_notif:'Notifikasi Push', account:'Tentang Akun',
+    male_only:'Putra', female_only:'Putri', mixed:'Campur',
+    upload_listing:'UPLOAD LISTING', save_draft:'Simpan Draft',
+    description:'Deskripsi', type_kost:'Tipe Kost', price_month:'Harga/Bulan (Rp)',
+    total_rooms:'Jml. Kamar', kost_name:'Nama Kost', campus_dist:'Jarak ke Kampus (opsional)',
+    a11y_note:'Mode aksesibel aktif: indikator warna menggunakan ikon & label untuk pengguna dengan gangguan penglihatan warna.',
+    no_kost:'Tidak ada kost ditemukan', no_kost_sub:'Coba ubah kata kunci atau filter',
+    verified:'Terverifikasi',
+  },
+  en: {
+    welcome:'Welcome 👋', search_placeholder:'Search location, campus, or kost name...',
+    near_campus:'Near Campus', all_kost:'All Kost', filter:'Search Filter',
+    price_range:'Price per Month', facilities:'Facilities', reset_filter:'Reset Filter',
+    apply_filter:'APPLY FILTER', available:'Available', almost_full:'Almost Full',
+    full:'Full', kost_seeker:'Room Seeker', kost_owner:'Property Owner',
+    beranda:'Home', favorit:'Favourites', booking:'Booking', profil:'Profile',
+    kos_saya:'My Properties', masuk:'LOGIN', daftar:'REGISTER NOW', keluar:'Log Out',
+    month:'/month', per_month:'/mo', rating:'Rating', location:'Location',
+    book_now:'BOOK NOW', back:'Back', save_fav:'Save to Favourites',
+    remove_fav:'Remove from Favourites', available_rooms:'{n} rooms available – Book now!',
+    almost_full_msg:'Almost full – Only 1 room left!',
+    full_msg:'No rooms – Get notified when available',
+    language:'Language', en_label:'English', id_label:'Bahasa Indonesia',
+    high_contrast:'High Contrast Mode', accessibility:'Accessibility',
+    settings:'Settings', push_notif:'Push Notifications', account:'Account Info',
+    male_only:'Male Only', female_only:'Female Only', mixed:'Mixed',
+    upload_listing:'UPLOAD LISTING', save_draft:'Save Draft',
+    description:'Description', type_kost:'Room Type', price_month:'Price/Month (IDR)',
+    total_rooms:'No. of Rooms', kost_name:'Property Name', campus_dist:'Distance to Campus (optional)',
+    a11y_note:'Accessible mode on: status indicators use icons & labels for users with colour-vision deficiency.',
+    no_kost:'No kost found', no_kost_sub:'Try changing keywords or filters',
+    verified:'Verified',
+  },
+};
+
+/* ══════════════════════════════════════════════
+   GLOBAL SETTINGS CONTEXT  (Step 10 + 11 + 12)
+══════════════════════════════════════════════ */
+interface AppSettings { lang: Lang; highContrast: boolean; }
+const SettingsCtx = createContext<{
+  s: AppSettings;
+  setLang:(l:Lang)=>void;
+  setHC:(v:boolean)=>void;
+  t:(k:string, vars?:Record<string,string|number>)=>string;
+  rupiah:(n:number)=>string;
+  typeLabel:(t:'putra'|'putri'|'campur')=>string;
+  statusInfo:(avail:number)=>{ text:string; color:string; icon:ReactNode; symbol:string; };
+}>({
+  s:{lang:'id',highContrast:false},
+  setLang:()=>{}, setHC:()=>{}, t:k=>k, rupiah:()=>'',
+  typeLabel:t=>t, statusInfo:()=>({text:'',color:'',icon:null,symbol:''}),
+});
+
+function SettingsProvider({ children }:{ children:ReactNode }) {
+  const [s, setS] = useState<AppSettings>(()=>{
+    try { return JSON.parse(localStorage.getItem('pk_settings')||'{"lang":"id","highContrast":false}'); }
+    catch { return {lang:'id',highContrast:false}; }
+  });
+  const save = (ns:AppSettings) => { setS(ns); localStorage.setItem('pk_settings',JSON.stringify(ns)); };
+  const setLang = (l:Lang)    => save({...s,lang:l});
+  const setHC   = (v:boolean) => save({...s,highContrast:v});
+
+  const t = (k:string, vars?:Record<string,string|number>) => {
+    let str = (T[s.lang][k] ?? T['id'][k] ?? k);
+    if (vars) Object.entries(vars).forEach(([vk,vv])=>{ str=str.replace(`{${vk}}`,String(vv)); });
+    return str;
+  };
+
+  // Step 10 – locale-aware currency
+  const rupiah = (n:number) =>
+    s.lang==='id'
+      ? new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',minimumFractionDigits:0}).format(n)
+      : new Intl.NumberFormat('en-US',{style:'currency',currency:'IDR',minimumFractionDigits:0,currencyDisplay:'code'}).format(n).replace('IDR','IDR ');
+
+  // Step 12 – bilingual type labels
+  const typeLabel = (tp:'putra'|'putri'|'campur') => ({
+    putra:  t('male_only'),
+    putri:  t('female_only'),
+    campur: t('mixed'),
+  }[tp]);
+
+  // Step 11 + 12 – Multi-modal status (color + icon + symbol)
+  const statusInfo = (n:number) => {
+    if (n === 0) return {
+      text: t('full_msg'),
+      color: s.highContrast ? '#000' : C.a11yFull,
+      icon: <XCircle size={12} style={{flexShrink:0}}/>,
+      symbol: '✕',
+    };
+    if (n === 1) return {
+      text: t('almost_full_msg'),
+      color: s.highContrast ? '#000' : C.a11yWarn,
+      icon: <AlertCircle size={12} style={{flexShrink:0}}/>,
+      symbol: '⚠',
+    };
+    return {
+      text: t('available_rooms',{n}),
+      color: s.highContrast ? '#000' : C.a11yAvail,
+      icon: <CheckCheck size={12} style={{flexShrink:0}}/>,
+      symbol: '✓',
+    };
+  };
+
+  return (
+    <SettingsCtx.Provider value={{s,setLang,setHC,t,rupiah,typeLabel,statusInfo}}>
+      <div style={{
+        filter: s.highContrast ? 'contrast(1.4) saturate(0.6)' : 'none',
+        transition: 'filter .3s',
+      }}>{children}</div>
+    </SettingsCtx.Provider>
+  );
+}
+const useSettings = () => useContext(SettingsCtx);
 
 /* ══════════════════════════════════════════════
    INTERACTION HOOKS
@@ -234,13 +374,15 @@ const DB = {
 /* ══════════════════════════════════════════════
    HELPERS
 ══════════════════════════════════════════════ */
+// Legacy rupiah for non-hook contexts (seed data labels etc.)
 const rupiah = (n: number) =>
   new Intl.NumberFormat('id-ID', { style:'currency', currency:'IDR', minimumFractionDigits:0 }).format(n);
 const avail = (l: Listing) => Math.max(0, l.totalRooms - l.occupiedRooms);
+// Legacy roomStatus kept for backward compat; components should prefer useSettings().statusInfo
 const roomStatus = (n: number) => {
-  if (n === 0) return { text:'Kamar penuh – Daftarkan untuk notifikasi', color: C.error };
-  if (n === 1) return { text:'Hampir penuh – Hanya tersisa 1 kamar!', color: C.warning };
-  return { text:`Sisa ${n} kamar kosong – Segera booking!`, color: C.success };
+  if (n === 0) return { text:'Kamar penuh – Daftarkan untuk notifikasi', color: C.a11yFull };
+  if (n === 1) return { text:'Hampir penuh – Hanya tersisa 1 kamar!', color: C.a11yWarn };
+  return { text:`Sisa ${n} kamar kosong – Segera booking!`, color: C.a11yAvail };
 };
 const BOOKING_LABEL: Record<Booking['status'],{label:string;color:string}> = {
   pending:   { label:'Menunggu Konfirmasi', color: C.warning },
@@ -248,7 +390,7 @@ const BOOKING_LABEL: Record<Booking['status'],{label:string;color:string}> = {
   rejected:  { label:'Ditolak',            color: C.error   },
   done:      { label:'Selesai',            color: C.muted   },
 };
-const FACI_ICON: Record<string, React.ReactNode> = {
+const FACI_ICON: Record<string, ReactNode> = {
   WiFi:<Wifi size={11}/>, AC:<Wind size={11}/>, Parkir:<Car size={11}/>,
   Dapur:<Utensils size={11}/>, Gym:<Dumbbell size={11}/>,
   'Kolam Renang':<Waves size={11}/>, 'Keamanan 24 jam':<Shield size={11}/>,
@@ -287,7 +429,7 @@ function FieldErr({ msg }:{ msg?:string }) {
 function TextInput({ label, placeholder, value, onChange, type='text', error, icon, rightEl }:{
   label?:string; placeholder?:string; value:string;
   onChange:(e:React.ChangeEvent<HTMLInputElement>)=>void;
-  type?:string; error?:string; icon?:React.ReactNode; rightEl?:React.ReactNode;
+  type?:string; error?:string; icon?:ReactNode; rightEl?:ReactNode;
 }) {
   return (
     <div style={{ marginBottom:14 }}>
@@ -341,7 +483,7 @@ function RoleRadio({ value, onChange }:{ value:UserRole; onChange:(r:UserRole)=>
 }
 
 function NavBtn({ active, icon, label, onClick }:{
-  active:boolean; icon:React.ReactNode; label:string; onClick:()=>void;
+  active:boolean; icon:ReactNode; label:string; onClick:()=>void;
 }) {
   return (
     <button onClick={onClick} style={{ display:'flex', flexDirection:'column', alignItems:'center',
@@ -356,44 +498,70 @@ function NavBtn({ active, icon, label, onClick }:{
    KOST CARD
 ══════════════════════════════════════════════ */
 function KostCard({ l, isFav, onFav, onClick }:{
-  l:Listing; isFav:boolean; onFav:(id:string)=>void; onClick:(l:Listing)=>void;
+  l:Listing; isFav:boolean; onFav:(id:string)=>void; onClick:(l:Listing)=>void; key?:string;
 }) {
-  const n = avail(l);
-  const st = roomStatus(n);
+  const { t, rupiah: fmt, typeLabel, statusInfo } = useSettings();
+  const n  = avail(l);
+  const st = statusInfo(n);
   const fallback = 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&q=80&w=600';
   const [sheet, setSheet] = useState(false);
   const lp = useLongPress(()=>setSheet(true));
+
   return (
     <>
+    {/* ── GESTALT: Figure-Ground via card shadow ── */}
     <div {...lp} onClick={()=>onClick(l)} style={{ background:'#fff', borderRadius:14, overflow:'hidden',
-      boxShadow:'0 4px 20px rgba(0,0,0,.05)', cursor:'pointer', userSelect:'none' }}>
+      boxShadow:'0 2px 16px rgba(0,0,0,.08)', cursor:'pointer', userSelect:'none',
+      border:'1px solid #f0f0f0' }}>
+
+      {/* Visual Hierarchy Level 1 – Photo */}
       <div style={{ position:'relative' }}>
         <img src={l.image||fallback} alt={l.name}
           onError={e=>{(e.target as HTMLImageElement).src=fallback;}}
           style={{ width:'100%', height:172, objectFit:'cover', display:'block' }}/>
+
+        {/* Fav button – Gestalt Figure-Ground: white on dark photo */}
         <button onClick={e=>{e.stopPropagation();onFav(l.id);}}
-          style={{ position:'absolute', top:10, right:10, background:'#fff', border:'none',
-            borderRadius:'50%', width:32, height:32, display:'flex', alignItems:'center',
-            justifyContent:'center', cursor:'pointer', boxShadow:'0 2px 8px rgba(0,0,0,.15)' }}>
-          <Heart size={15} style={{ fill:isFav?C.error:'none', color:isFav?C.error:'#ccc' }}/>
+          style={{ position:'absolute', top:10, right:10, background:'rgba(255,255,255,.92)',
+            border:'none', borderRadius:'50%', width:34, height:34, display:'flex',
+            alignItems:'center', justifyContent:'center', cursor:'pointer',
+            boxShadow:'0 2px 8px rgba(0,0,0,.2)', minWidth:44, minHeight:44,
+            marginTop:-5, marginRight:-5 }}>
+          <Heart size={15} style={{ fill:isFav?C.error:'none', color:isFav?C.error:'#bbb' }}/>
         </button>
+
+        {/* Step 10 – Bilingual type badge */}
         <span style={{ position:'absolute', top:10, left:10, background:C.primary, color:C.dark,
-          fontSize:9, fontWeight:700, padding:'3px 8px', borderRadius:20, textTransform:'uppercase' }}>
-          {l.type}
+          fontSize:9, fontWeight:800, padding:'3px 9px', borderRadius:20, textTransform:'uppercase',
+          letterSpacing:.4 }}>
+          {typeLabel(l.type)}
         </span>
       </div>
+
+      {/* Gestalt: Common Region – content block */}
       <div style={{ padding:'12px 14px 14px', display:'flex', flexDirection:'column', gap:4 }}>
+        {/* Level 1 – Name + Rating (most critical info) */}
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-          <span style={{ fontWeight:700, fontSize:13, color:C.dark, flex:1, paddingRight:8 }}>{l.name}</span>
-          {l.rating>0 && <span style={{ display:'flex', alignItems:'center', gap:3 }}>
+          <span style={{ fontWeight:800, fontSize:14, color:C.dark, flex:1, paddingRight:8, lineHeight:1.3 }}>
+            {l.name}
+          </span>
+          {l.rating>0 && <span style={{ display:'flex', alignItems:'center', gap:3, flexShrink:0 }}>
             <Star size={12} style={{ fill:C.primary, color:C.primary }}/>
             <span style={{ fontSize:12, fontWeight:700 }}>{l.rating.toFixed(1)}</span>
           </span>}
         </div>
+
+        {/* Level 2 – Location + Campus (Gestalt: Proximity – grouped together) */}
         <span style={{ display:'flex', alignItems:'center', gap:4, color:'#555', fontSize:12 }}>
           <MapPin size={11}/>{l.location}
         </span>
-        {l.distanceToCampus && <span style={{ fontSize:12, fontWeight:600, color:C.primary }}>🎓 {l.distanceToCampus}</span>}
+        {l.distanceToCampus && (
+          <span style={{ fontSize:12, fontWeight:700, color:C.a11yAvail, display:'flex', alignItems:'center', gap:4 }}>
+            🎓 {l.distanceToCampus}
+          </span>
+        )}
+
+        {/* Level 2 – Facilities (Gestalt: Similarity – all chips look identical) */}
         <div style={{ display:'flex', flexWrap:'wrap', gap:4, marginTop:4 }}>
           {l.facilities.slice(0,3).map(f=>(
             <span key={f} style={{ display:'flex', alignItems:'center', gap:3, padding:'3px 8px',
@@ -402,13 +570,22 @@ function KostCard({ l, isFav, onFav, onClick }:{
             </span>
           ))}
         </div>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
-          marginTop:8, paddingTop:8, borderTop:'1px solid #f0f0f0' }}>
+
+        {/* Separator – Gestalt: Continuity */}
+        <div style={{ borderTop:'1px solid #f0f0f0', marginTop:8, paddingTop:8,
+          display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+
+          {/* Level 1 – Price (bold, large) */}
           <div>
-            <span style={{ fontWeight:800, fontSize:14, color:C.dark }}>{rupiah(l.price)}</span>
-            <span style={{ fontSize:10, color:C.muted }}>/bulan</span>
+            <span style={{ fontWeight:800, fontSize:15, color:C.dark }}>{fmt(l.price)}</span>
+            <span style={{ fontSize:10, color:C.muted }}>{t('month')}</span>
           </div>
-          <span style={{ fontSize:10, fontWeight:600, color:st.color, textAlign:'right', maxWidth:'55%' }}>{st.text}</span>
+
+          {/* Step 11 + 12 – Multi-modal status: icon + color + text */}
+          <span style={{ display:'flex', alignItems:'center', gap:3,
+            fontSize:10, fontWeight:700, color:st.color, textAlign:'right', maxWidth:'55%', lineHeight:1.3 }}>
+            {st.icon}{st.text}
+          </span>
         </div>
       </div>
     </div>
@@ -423,8 +600,8 @@ function KostCard({ l, isFav, onFav, onClick }:{
           <div style={{ fontSize:14, fontWeight:800, color:C.dark, marginBottom:4 }}>{l.name}</div>
           <div style={{ fontSize:11, color:C.muted, marginBottom:20 }}>{l.location}</div>
           {[
-            { icon:'❤️', label: isFav?'Hapus dari Favorit':'Simpan ke Favorit', action:()=>{ onFav(l.id); setSheet(false); }, color:isFav?C.error:C.dark },
-            { icon:'📞', label:'Hubungi Pemilik via WA', action:()=>{ window.open(`https://wa.me/628123456789?text=Halo, saya tertarik dengan ${l.name}`); setSheet(false); }, color:C.success },
+            { icon:'❤️', label: isFav ? t('remove_fav') : t('save_fav'), action:()=>{ onFav(l.id); setSheet(false); }, color:isFav?C.error:C.dark },
+            { icon:'📞', label:'Hubungi Pemilik via WA', action:()=>{ window.open(`https://wa.me/628123456789?text=Halo, saya tertarik dengan ${l.name}`); setSheet(false); }, color:C.a11yAvail },
             { icon:'🔗', label:'Salin Link Listing', action:()=>{ navigator.clipboard?.writeText(`PapiKost – ${l.name} @ ${l.location}`).catch(()=>{}); setSheet(false); }, color:C.dark },
           ].map(a=>(
             <button key={a.label} onClick={a.action} style={{ width:'100%', display:'flex', alignItems:'center',
@@ -668,9 +845,10 @@ function HomeView({ user, onListingClick, favorites, onFav, refresh, onGoApartme
   favorites:string[]; onFav:(id:string)=>void; refresh:number;
   onGoApartment:()=>void;
 }) {
+  const { t, s, typeLabel } = useSettings();
   const [query,  setQuery]  = useState('');
   const [campus, setCampus] = useState<string|null>(null);
-  const [type,   setType]   = useState<string|null>(null);
+  const [type,   setType]   = useState<'putra'|'putri'|'campur'|null>(null);
   const [loading,setLoading]= useState(true);
   const [list,   setList]   = useState<Listing[]>([]);
   const [sheet,  setSheet]  = useState(false);
@@ -767,7 +945,7 @@ function HomeView({ user, onListingClick, favorites, onFav, refresh, onGoApartme
       <div style={{ background:`linear-gradient(135deg,${C.primary} 0%,${C.secondary} 100%)`, padding:'48px 18px 24px' }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:16 }}>
           <div>
-            <div style={{ fontSize:11, fontWeight:600, color:'rgba(26,26,26,.6)', marginBottom:2 }}>Selamat datang 👋</div>
+            <div style={{ fontSize:11, fontWeight:600, color:'rgba(26,26,26,.6)', marginBottom:2 }}>{t('welcome')}</div>
             <h1 style={{ fontSize:22, fontWeight:800, color:C.dark, margin:0 }}>
               Halo, {user.name.split(' ')[0]}!
             </h1>
@@ -780,7 +958,7 @@ function HomeView({ user, onListingClick, favorites, onFav, refresh, onGoApartme
           <div style={{ position:'relative', flex:1 }}>
             <Search size={17} style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', color:C.dark }}/>
             <input value={query} onChange={e=>setQuery(e.target.value)}
-              placeholder="Cari lokasi, kampus, atau nama kost..."
+              placeholder={t('search_placeholder')}
               style={{ width:'100%', boxSizing:'border-box', paddingLeft:42, paddingRight: query?36:16,
                 paddingTop:14, paddingBottom:14, borderRadius:14, border:'none', outline:'none',
                 fontSize:13, background:'#fff', boxShadow:'0 4px 16px rgba(0,0,0,.1)', color:C.dark }}/>
@@ -867,7 +1045,7 @@ function HomeView({ user, onListingClick, favorites, onFav, refresh, onGoApartme
         {/* Campus */}
         <div style={{ marginTop:18 }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-            <span style={{ fontSize:13, fontWeight:700, color:C.dark }}>🎓 Dekat Kampus</span>
+            <span style={{ fontSize:13, fontWeight:700, color:C.dark }}>🎓 {t('near_campus')}</span>
             <span style={{ fontSize:10, color:C.muted, display:'flex', alignItems:'center', gap:3 }}>
               <HelpCircle size={12}/> dalam 1 km
             </span>
@@ -904,29 +1082,32 @@ function HomeView({ user, onListingClick, favorites, onFav, refresh, onGoApartme
           </div>
         </div>
 
-        {/* Type + Apartment filter */}
+        {/* Step 10 – Bilingual type filter chips */}
         <div style={{ display:'flex', gap:8, marginTop:12, overflowX:'auto', paddingBottom:2 }}>
-          {[null,'putra','putri','campur'].map(t=>(
-            <button key={String(t)} onClick={()=>setType(t)}
+          {([null,'putra','putri','campur'] as const).map(tp=>(
+            <button key={String(tp)} onClick={()=>setType(tp)}
               style={{ whiteSpace:'nowrap', padding:'5px 12px', borderRadius:20, fontSize:10, fontWeight:600,
-                border: type===t ? 'none' : '1.5px solid #e0e0e0',
-                background: type===t ? C.dark : '#fff',
-                color: type===t ? '#fff' : '#666', cursor:'pointer', flexShrink:0 }}>
-              {t===null ? 'Semua' : t.charAt(0).toUpperCase()+t.slice(1)}
+                border: type===tp ? 'none' : '1.5px solid #e0e0e0',
+                background: type===tp ? C.dark : '#fff',
+                color: type===tp ? '#fff' : '#666', cursor:'pointer', flexShrink:0 }}>
+              {tp===null ? (s.lang==='en'?'All':'Semua') : typeLabel(tp)}
             </button>
           ))}
           <button onClick={onGoApartment}
             style={{ whiteSpace:'nowrap', padding:'5px 12px', borderRadius:20, fontSize:10, fontWeight:700,
               border:'none', background:C.primary, color:C.dark, cursor:'pointer', flexShrink:0,
               display:'flex', alignItems:'center', gap:4 }}>
-            🏢 Apartemen <ChevronRight size={11}/>
+            🏢 {s.lang==='en'?'Apartments':'Apartemen'} <ChevronRight size={11}/>
           </button>
         </div>
 
         {/* Listings */}
         <div style={{ marginTop:20 }}>
           <div style={{ fontSize:13, fontWeight:700, color:C.dark, marginBottom:12 }}>
-            {campus ? `Kost Dekat ${campus}` : 'Semua Kost'} ({loading ? '...' : filtered.length})
+            {campus
+              ? (s.lang==='en'?`Kost Near ${campus}`:`Kost Dekat ${campus}`)
+              : t('all_kost')
+            } ({loading ? '...' : filtered.length})
           </div>
           <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
             {loading ? (
@@ -946,10 +1127,10 @@ function HomeView({ user, onListingClick, favorites, onFav, refresh, onGoApartme
               : filtered.length===0
                 ? <div style={{ textAlign:'center', padding:'32px 0', color:C.muted }}>
                     <Search size={32} style={{ margin:'0 auto 12px', display:'block', color:'#ddd' }}/>
-                    <div style={{ fontSize:13, fontWeight:600 }}>Tidak ada kost ditemukan</div>
-                    <div style={{ fontSize:11, marginTop:4 }}>Coba ubah kata kunci atau filter</div>
+                    <div style={{ fontSize:13, fontWeight:600 }}>{t('no_kost')}</div>
+                    <div style={{ fontSize:11, marginTop:4 }}>{t('no_kost_sub')}</div>
                   </div>
-                : filtered.map(l=><KostCard key={l.id} l={l}
+                : filtered.map((l:Listing)=><KostCard key={l.id} l={l}
                     isFav={favorites.includes(l.id)} onFav={onFav} onClick={onListingClick}/>)
             }
           </div>
@@ -963,7 +1144,7 @@ function HomeView({ user, onListingClick, favorites, onFav, refresh, onGoApartme
    APARTMENT CARD (landscape)
 ══════════════════════════════════════════════ */
 function ApartmentCard({ l, isFav, onFav, onClick }:{
-  l:Listing; isFav:boolean; onFav:(id:string)=>void; onClick:(l:Listing)=>void;
+  l:Listing; isFav:boolean; onFav:(id:string)=>void; onClick:(l:Listing)=>void; key?:string;
 }) {
   const n  = avail(l);
   const st = roomStatus(n);
@@ -1143,7 +1324,7 @@ function ApartmentView({ onBack, onListingClick, favorites, onFav }:{
                   <div style={{ fontSize:13, fontWeight:600 }}>Tidak ada unit ditemukan</div>
                   <div style={{ fontSize:11, marginTop:4 }}>Coba ubah atau hapus filter</div>
                 </div>
-              : filtered.map(l=>(
+              : filtered.map((l:Listing)=>(
                   <ApartmentCard key={l.id} l={l}
                     isFav={favorites.includes(l.id)} onFav={onFav} onClick={onListingClick}/>
                 ))
@@ -1173,7 +1354,7 @@ function FavoritesView({ favorites, onListingClick, onFav }:{
             <div style={{ fontSize:12, marginTop:4 }}>Tap ikon hati di kartu kost untuk menyimpan</div>
           </div>
         : <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-            {favs.map(l=><KostCard key={l.id} l={l} isFav onFav={id=>setConfirmId(id)} onClick={onListingClick}/>)}
+            {favs.map((l:Listing)=><KostCard key={l.id} l={l} isFav onFav={id=>setConfirmId(id)} onClick={onListingClick}/>)}
           </div>
       }
 
@@ -1210,8 +1391,9 @@ function FavoritesView({ favorites, onListingClick, onFav }:{
 function DetailView({ l, onBack, onBooking, isFav, onFav }:{
   l:Listing; onBack:()=>void; onBooking:()=>void; isFav:boolean; onFav:(id:string)=>void;
 }) {
+  const { t, rupiah: fmt, typeLabel, statusInfo } = useSettings();
   const n  = avail(l);
-  const st = roomStatus(n);
+  const st = statusInfo(n);
   const fallback = 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&q=80&w=600';
   const [photoZoom, setPhotoZoom] = useState(false);
   const { copy, copied } = useClipboard();
@@ -1262,9 +1444,10 @@ function DetailView({ l, onBack, onBooking, isFav, onFav }:{
           boxShadow:'0 2px 8px rgba(0,0,0,.15)' }}>
           <Heart size={18} style={{ fill:isFav?C.error:'none', color:isFav?C.error:C.dark }}/>
         </button>
+        {/* Step 10 – Bilingual type badge */}
         <div style={{ position:'absolute', bottom:14, left:14 }}>
           <span style={{ background:C.primary, color:C.dark, fontSize:10, fontWeight:700,
-            padding:'3px 10px', borderRadius:20, textTransform:'uppercase' }}>{l.type}</span>
+            padding:'3px 10px', borderRadius:20, textTransform:'uppercase' }}>{typeLabel(l.type)}</span>
         </div>
       </div>
 
@@ -1279,24 +1462,26 @@ function DetailView({ l, onBack, onBooking, isFav, onFav }:{
         <div style={{ display:'flex', alignItems:'center', gap:4, color:C.muted, fontSize:12, marginBottom:6 }}>
           <MapPin size={13}/>{l.location}
         </div>
-        {l.distanceToCampus && <div style={{ fontSize:12, fontWeight:700, color:C.primary, marginBottom:12 }}>
+        {l.distanceToCampus && <div style={{ fontSize:12, fontWeight:700, color:C.a11yAvail, marginBottom:12 }}>
           🎓 {l.distanceToCampus}
         </div>}
 
-        {/* Status */}
-        <div style={{ background:st.color+'18', border:`1.5px solid ${st.color}30`, borderRadius:12,
+        {/* Step 11 + 12 – Multi-modal status: icon + symbol + text + color band */}
+        <div style={{ background:st.color+'18', border:`1.5px solid ${st.color}40`, borderRadius:12,
           padding:'10px 14px', marginBottom:18, display:'flex', alignItems:'center', gap:8 }}>
-          <div style={{ width:8, height:8, borderRadius:'50%', background:st.color, flexShrink:0 }}/>
-          <span style={{ fontSize:12, fontWeight:600, color:st.color }}>{st.text}</span>
+          <span style={{ fontSize:16, flexShrink:0 }}>{st.symbol}</span>
+          <div>
+            <span style={{ fontSize:12, fontWeight:700, color:st.color }}>{st.text}</span>
+          </div>
         </div>
 
-        {/* Price */}
+        {/* Price – locale-aware */}
         <div style={{ background:C.surface, borderRadius:14, padding:'16px', marginBottom:18 }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
             <div style={{ fontSize:12, fontWeight:700, color:C.dark }}>Harga Sewa per Tipe Kamar</div>
             <span style={{ display:'flex', alignItems:'center', gap:4, fontSize:10, fontWeight:700,
-              color:C.success, background:`${C.success}15`, padding:'3px 10px', borderRadius:20 }}>
-              <CheckCircle2 size={11}/> Terverifikasi
+              color:C.a11yAvail, background:`${C.a11yAvail}15`, padding:'3px 10px', borderRadius:20 }}>
+              <CheckCircle2 size={11}/> {t('verified')}
             </span>
           </div>
           {[
@@ -1311,8 +1496,8 @@ function DetailView({ l, onBack, onBooking, isFav, onFav }:{
                 <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{r.desc}</div>
               </div>
               <div style={{ textAlign:'right' }}>
-                <div style={{ fontSize:15, fontWeight:900, color:C.dark }}>{rupiah(r.price)}</div>
-                <div style={{ fontSize:10, color:C.muted }}>/bulan</div>
+                <div style={{ fontSize:15, fontWeight:900, color:C.dark }}>{fmt(r.price)}</div>
+                <div style={{ fontSize:10, color:C.muted }}>{t('per_month')}</div>
               </div>
             </div>
           ))}
@@ -1323,7 +1508,7 @@ function DetailView({ l, onBack, onBooking, isFav, onFav }:{
             </div>
             <div style={{ display:'flex', justifyContent:'space-between', fontSize:12 }}>
               <span style={{ color:'#555' }}>Sewa standar × 6</span>
-              <span style={{ fontWeight:700 }}>{rupiah(l.price*6)}</span>
+              <span style={{ fontWeight:700 }}>{fmt(l.price*6)}</span>
             </div>
           </div>
           <div style={{ marginTop:10, fontSize:11, color:C.muted, lineHeight:1.6 }}>
@@ -1377,7 +1562,7 @@ function DetailView({ l, onBack, onBooking, isFav, onFav }:{
         </div>
       </div>
 
-      <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)',
+      <div style={{ position:'fixed', bottom:60, left:'50%', transform:'translateX(-50%)',
         width:'100%', maxWidth:430, background:'#fff', borderTop:'1px solid #f0f0f0',
         padding:'14px 18px 32px', boxShadow:'0 -4px 20px rgba(0,0,0,.08)' }}>
         <button onClick={onBooking} disabled={n===0}
@@ -2201,6 +2386,7 @@ function ProfileView({ user, onLogout, onEdit }:{
   user:AppUser; onLogout:()=>void; onEdit:(u:AppUser)=>void;
 }) {
   const [notif,       setNotif]       = useState(true);
+  const { s, setLang, setHC } = useSettings();
   const [editing,     setEditing]     = useState(false);
   const [form,        setForm]        = useState({ name:user.name, phone:user.phone });
   const [busy,        setBusy]        = useState(false);
@@ -2327,6 +2513,8 @@ function ProfileView({ user, onLogout, onEdit }:{
       {/* Settings */}
       <div style={{ background:'#fff', borderRadius:16, overflow:'hidden',
         boxShadow:'0 2px 12px rgba(0,0,0,.05)', marginBottom:12 }}>
+
+        {/* Push Notif */}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
           padding:'14px 16px', borderBottom:'1px solid #f5f5f5' }}>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
@@ -2340,6 +2528,54 @@ function ProfileView({ user, onLogout, onEdit }:{
               boxShadow:'0 1px 4px rgba(0,0,0,.2)' }}/>
           </div>
         </div>
+
+        {/* Step 10 – Language toggle */}
+        <div style={{ padding:'14px 16px', borderBottom:'1px solid #f5f5f5' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+            <Languages size={18} style={{ color:C.muted }}/>
+            <span style={{ fontSize:13, color:C.dark, fontWeight:600 }}>Bahasa / Language</span>
+          </div>
+          <div style={{ display:'flex', gap:8 }}>
+            {(['id','en'] as const).map(l=>(
+              <button key={l} onClick={()=>setLang(l)}
+                style={{ flex:1, padding:'9px', borderRadius:12, fontSize:12, fontWeight:700, cursor:'pointer',
+                  border: s.lang===l ? `2px solid ${C.primary}` : '1.5px solid #e0e0e0',
+                  background: s.lang===l ? C.primary : '#fff',
+                  color: s.lang===l ? C.dark : C.muted }}>
+                {l==='id' ? '🇮🇩  Indonesia' : '🇬🇧  English'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Step 11 – Accessibility: High Contrast */}
+        <div style={{ padding:'14px 16px', borderBottom:'1px solid #f5f5f5' }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <Contrast size={18} style={{ color:C.muted }}/>
+              <div>
+                <div style={{ fontSize:13, color:C.dark }}>Mode Kontras Tinggi</div>
+                <div style={{ fontSize:10, color:C.muted }}>Untuk gangguan penglihatan warna</div>
+              </div>
+            </div>
+            <div onClick={()=>setHC(!s.highContrast)} style={{ width:44, height:24, borderRadius:12,
+              background: s.highContrast?C.dark:'#ddd', cursor:'pointer', position:'relative', transition:'background .2s' }}>
+              <div style={{ position:'absolute', top:2, left: s.highContrast?22:2, width:20, height:20,
+                borderRadius:'50%', background:'#fff', transition:'left .2s',
+                boxShadow:'0 1px 4px rgba(0,0,0,.2)' }}/>
+            </div>
+          </div>
+          {s.highContrast && (
+            <div style={{ marginTop:10, padding:'8px 10px', borderRadius:8,
+              background:`${C.a11yAvail}12`, border:`1px solid ${C.a11yAvail}40`,
+              fontSize:10, color:C.a11yAvail, lineHeight:1.5, display:'flex', alignItems:'flex-start', gap:6 }}>
+              <CheckCircle2 size={12} style={{ flexShrink:0, marginTop:1 }}/>
+              Mode aksesibel aktif: indikator status menggunakan ikon & label untuk pengguna dengan gangguan penglihatan warna.
+            </div>
+          )}
+        </div>
+
+        {/* Email */}
         <div style={{ padding:'14px 16px', display:'flex', alignItems:'center', gap:10 }}>
           <Mail size={18} style={{ color:C.muted }}/>
           <div style={{ flex:1 }}>
@@ -2555,7 +2791,7 @@ export default function App() {
     input[type=date]::-webkit-calendar-picker-indicator{opacity:.5}
   `;
 
-  const wrap = (ch:React.ReactNode) => (
+  const wrap = (ch:ReactNode) => (
     <div style={{ maxWidth:430, margin:'0 auto', minHeight:'100vh', background:'#fff',
       position:'relative', overflow:'hidden' }}>
       <style>{CSS}</style>
@@ -2563,12 +2799,12 @@ export default function App() {
     </div>
   );
 
-  if (screen==='splash')   return wrap(<SplashScreen onDone={()=>setScreen('login')}/>);
-  if (screen==='login')    return wrap(<div style={{ minHeight:'100vh', overflowY:'auto' }}>
-    <LoginScreen onLogin={login} onGoRegister={()=>setScreen('register')}/></div>);
-  if (screen==='register') return wrap(<div style={{ minHeight:'100vh', overflowY:'auto' }}>
-    <RegisterScreen onRegister={login} onGoLogin={()=>setScreen('login')}/></div>);
-  if (!user) return wrap(<SplashScreen onDone={()=>setScreen('login')}/>);
+  if (screen==='splash')   return wrap(<SettingsProvider><SplashScreen onDone={()=>setScreen('login')}/></SettingsProvider>);
+  if (screen==='login')    return wrap(<SettingsProvider><div style={{ minHeight:'100vh', overflowY:'auto' }}>
+    <LoginScreen onLogin={login} onGoRegister={()=>setScreen('register')}/></div></SettingsProvider>);
+  if (screen==='register') return wrap(<SettingsProvider><div style={{ minHeight:'100vh', overflowY:'auto' }}>
+    <RegisterScreen onRegister={login} onGoLogin={()=>setScreen('login')}/></div></SettingsProvider>);
+  if (!user) return wrap(<SettingsProvider><SplashScreen onDone={()=>setScreen('login')}/></SettingsProvider>);
 
   const showNav = view!=='booking' && view!=='add-listing' && view!=='apartment';
 
@@ -2599,6 +2835,23 @@ export default function App() {
   };
 
   return wrap(
+    <SettingsProvider>
+      <AppInner
+        user={user} nav={nav} view={view} listing={listing}
+        favs={favs} refresh={refresh} showNav={showNav}
+        renderView={renderView} goNav={goNav} toggleFav={toggleFav}
+      />
+    </SettingsProvider>
+  );
+}
+
+function AppInner({ user, nav, view, listing, favs, refresh, showNav, renderView, goNav, toggleFav }:{
+  user:AppUser; nav:View; view:View; listing:Listing|null;
+  favs:string[]; refresh:number; showNav:boolean;
+  renderView:()=>ReactNode; goNav:(v:View)=>void; toggleFav:(id:string)=>void;
+}) {
+  const { t } = useSettings();
+  return (
     <>
       <div style={{ paddingBottom: showNav?72:0, minHeight:'100vh', overflowY:'auto' }}>
         {renderView()}
@@ -2608,14 +2861,14 @@ export default function App() {
           width:'100%', maxWidth:430, background:'#fff', borderTop:'1px solid #f0f0f0',
           boxShadow:'0 -2px 10px rgba(0,0,0,.05)', display:'flex', justifyContent:'space-around',
           alignItems:'center', paddingTop:10, paddingBottom:20, zIndex:999 }}>
-          <NavBtn icon={<HomeIcon size={22}/>}    label="Beranda"  active={nav==='home'}      onClick={()=>goNav('home')}/>
-          <NavBtn icon={<Heart size={22}/>}       label="Favorit"  active={nav==='favorites'} onClick={()=>goNav('favorites')}/>
-          <NavBtn icon={<ClipboardList size={22}/>} label="Booking" active={nav==='dashboard' && user.role==='seeker'} onClick={()=>goNav('dashboard')}/>
+          <NavBtn icon={<HomeIcon size={22}/>}       label={t('beranda')}   active={nav==='home'}      onClick={()=>goNav('home')}/>
+          <NavBtn icon={<Heart size={22}/>}           label={t('favorit')}   active={nav==='favorites'} onClick={()=>goNav('favorites')}/>
+          <NavBtn icon={<ClipboardList size={22}/>}   label={t('booking')}   active={nav==='dashboard' && user.role==='seeker'} onClick={()=>goNav('dashboard')}/>
           {user.role==='owner' && (
-            <NavBtn icon={<LayoutDashboard size={22}/>} label="Kos Saya"
+            <NavBtn icon={<LayoutDashboard size={22}/>} label={t('kos_saya')}
               active={nav==='dashboard' && user.role==='owner'} onClick={()=>goNav('dashboard')}/>
           )}
-          <NavBtn icon={<User size={22}/>}        label="Profil"   active={nav==='profile'}   onClick={()=>goNav('profile')}/>
+          <NavBtn icon={<User size={22}/>}            label={t('profil')}    active={nav==='profile'}   onClick={()=>goNav('profile')}/>
         </nav>
       )}
       <FabHelp visible={showNav}/>
