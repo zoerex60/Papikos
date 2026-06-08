@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #FFD600;
+  --color-secondary: #FFE033;
+  --color-error: #E24B4A;
+  --color-success: #52C41A;
+  
+  --radius-card: 14px;
+  --radius-input: 10px;
+  --radius-button: 20px;
+  
+  --font-sans: "Inter", "Helvetica Neue", Arial, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-white text-[#1a1a1a] font-sans overflow-x-hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+.bottom-nav-shadow {
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.kost-card-shadow {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+@keyframes skeleton {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton 1.5s infinite;
+}

@@ -1,0 +1,5 @@
+beranda: aman
+tombol indicator booking sekarang
+favorit: aman
+kos saya: aman
+booking: aman
